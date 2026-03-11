@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { mockProvider } from "@/lib/mock-provider";
+import { getProvider } from "@/lib/get-provider";
 
 export async function ThreadList() {
-  const threads = await mockProvider.getThreads();
+  const provider = await getProvider();
+  const threads = await provider.getThreads();
 
   return (
     <ul className="divide-y divide-gray-200 bg-white border border-gray-200 rounded-lg overflow-hidden">

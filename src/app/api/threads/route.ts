@@ -1,6 +1,7 @@
-import { mockProvider } from "@/lib/mock-provider";
+import { getProvider } from "@/lib/get-provider";
 
 export async function GET() {
-  const threads = await mockProvider.getThreads();
+  const provider = await getProvider();
+  const threads = await provider.getThreads();
   return Response.json({ threads });
 }

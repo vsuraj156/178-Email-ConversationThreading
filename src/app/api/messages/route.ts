@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { mockProvider } from "@/lib/mock-provider";
+import { getProvider } from "@/lib/get-provider";
 import { getInboxState, filterMessages } from "@/lib/inbox";
 
 export async function GET(request: NextRequest) {
@@ -8,7 +8,8 @@ export async function GET(request: NextRequest) {
   const labelId = searchParams.get("labelId") ?? undefined;
   const conversationId = searchParams.get("conversationId") ?? undefined;
 
-  const { messages, messageToConversation } = await getInboxState(mockProvider);
+  const provider = await getProvider();
+  const { messages, messageToConversation } = await getInboxState(provider);
   const filtered = filterMessages(messages, messageToConversation, {
     threadId,
     labelId,

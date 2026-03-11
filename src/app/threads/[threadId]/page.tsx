@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { ViewToggle } from "@/components/ViewToggle";
-import { mockProvider } from "@/lib/mock-provider";
+import { getProvider } from "@/lib/get-provider";
 
 async function getThread(threadId: string) {
+  const provider = await getProvider();
   const [threads, messages] = await Promise.all([
-    mockProvider.getThreads(),
-    mockProvider.getMessages({ threadId }),
+    provider.getThreads(),
+    provider.getMessages({ threadId }),
   ]);
   const thread = threads.find((t) => t.id === threadId) ?? null;
   return { thread, messages };

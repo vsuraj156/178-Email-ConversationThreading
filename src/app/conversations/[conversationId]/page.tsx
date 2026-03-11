@@ -3,12 +3,13 @@ import { Suspense } from "react";
 import { ViewToggle } from "@/components/ViewToggle";
 import { getInboxState, getMessagesInConversation } from "@/lib/inbox";
 import { getEffectiveTitle } from "@/lib/conversation-overrides";
-import { mockProvider } from "@/lib/mock-provider";
+import { getProvider } from "@/lib/get-provider";
 import { ConversationTitleEdit } from "@/components/ConversationTitleEdit";
 
 async function getConversation(conversationId: string) {
+  const provider = await getProvider();
   const { messages, conversations, messageToConversation } =
-    await getInboxState(mockProvider);
+    await getInboxState(provider);
   const conversation = conversations.find((c) => c.id === conversationId);
   if (!conversation) return null;
   const conversationMessages = getMessagesInConversation(
@@ -108,13 +109,14 @@ export default async function ConversationDetailPage({
                     </span>
                   ))}
                 </div>
-                <button
-                  type="button"
-                  className="mt-2 text-xs text-blue-600 hover:underline"
-                  aria-label="Open in Gmail (placeholder)"
+                <a
+                  href={`https://mail.google.com/mail/u/0/#inbox/${m.threadId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 text-xs text-blue-600 hover:underline inline-block"
                 >
                   Open in Gmail
-                </button>
+                </a>
               </li>
             )
           )}

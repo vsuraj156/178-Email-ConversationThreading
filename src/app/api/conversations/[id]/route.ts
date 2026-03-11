@@ -1,15 +1,16 @@
 import { NextRequest } from "next/server";
 import { getInboxState, getMessagesInConversation } from "@/lib/inbox";
 import { getEffectiveTitle, setConversationTitleOverride } from "@/lib/conversation-overrides";
-import { mockProvider } from "@/lib/mock-provider";
+import { getProvider } from "@/lib/get-provider";
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const provider = await getProvider();
   const { messages, conversations, messageToConversation } =
-    await getInboxState(mockProvider);
+    await getInboxState(provider);
 
   const conversation = conversations.find((c) => c.id === id);
   if (!conversation) {

@@ -1,10 +1,11 @@
 import { getInboxState, getMessagesInConversation } from "@/lib/inbox";
 import { getEffectiveTitle } from "@/lib/conversation-overrides";
-import { mockProvider } from "@/lib/mock-provider";
+import { getProvider } from "@/lib/get-provider";
 
 export async function GET() {
+  const provider = await getProvider();
   const { messages, conversations, messageToConversation } =
-    await getInboxState(mockProvider);
+    await getInboxState(provider);
   const enriched = conversations.map((c) => {
     const convMessages = getMessagesInConversation(
       messages,
