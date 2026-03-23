@@ -17,7 +17,7 @@ export async function getInboxState(
 ): Promise<CacheEntry> {
   if (cache.has(userId)) return cache.get(userId)!;
   const messages = await provider.getMessages();
-  const { conversations, messageToConversation } = clusterMessages(messages);
+  const { conversations, messageToConversation } = await clusterMessages(messages);
   const entry: CacheEntry = { messages, conversations, messageToConversation };
   cache.set(userId, entry);
   return entry;
