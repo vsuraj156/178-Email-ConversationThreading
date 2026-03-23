@@ -1,13 +1,25 @@
-const titleOverrides = new Map<string, string>();
+// Keyed by userId → conversationId → title
+const overridesByUser = new Map<string, Map<string, string>>();
 
-export function getConversationTitleOverride(conversationId: string): string | undefined {
-  return titleOverrides.get(conversationId);
+function getUserOverrides(userId: string): Map<string, string> {
+  if (!overridesByUser.has(userId)) {
+    overridesByUser.set(userId, new Map());
+  }
+  return overridesByUser.get(userId)!;
 }
 
-export function setConversationTitleOverride(conversationId: string, title: string): void {
-  titleOverrides.set(conversationId, title);
+export function getEffectiveTitle(
+  userId: string,
+  conversationId: string,
+  defaultTitle: string
+): string {
+  return getUserOverrides(userId).get(conversationId) ?? defaultTitle;
 }
 
-export function getEffectiveTitle(conversationId: string, defaultTitle: string): string {
-  return titleOverrides.get(conversationId) ?? defaultTitle;
+export function setConversationTitleOverride(
+  userId: string,
+  conversationId: string,
+  title: string
+): void {
+  getUserOverrides(userId).set(conversationId, title);
 }

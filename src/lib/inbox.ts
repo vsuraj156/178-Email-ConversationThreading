@@ -2,22 +2,25 @@ import type { Message, Conversation, MessageFilters } from "./types";
 import type { EmailProvider } from "./provider";
 import { clusterMessages } from "./clustering";
 
-let cached: {
+type CacheEntry = {
   messages: Message[];
   conversations: Conversation[];
   messageToConversation: Map<string, string>;
-} | null = null;
+};
 
-export async function getInboxState(provider: EmailProvider): Promise<{
-  messages: Message[];
-  conversations: Conversation[];
-  messageToConversation: Map<string, string>;
-}> {
-  if (cached) return cached;
+// Keyed by userId so each user gets their own isolated cache
+const cache = new Map<string, CacheEntry>();
+
+export async function getInboxState(
+  provider: EmailProvider,
+  userId: string
+): Promise<CacheEntry> {
+  if (cache.has(userId)) return cache.get(userId)!;
   const messages = await provider.getMessages();
   const { conversations, messageToConversation } = clusterMessages(messages);
-  cached = { messages, conversations, messageToConversation };
-  return cached;
+  const entry: CacheEntry = { messages, conversations, messageToConversation };
+  cache.set(userId, entry);
+  return entry;
 }
 
 export function getMessagesInConversation(
@@ -34,13 +37,12 @@ export function getMessagesInConversation(
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
 
-export async function syncInbox(provider: EmailProvider): Promise<{
-  messages: Message[];
-  conversations: Conversation[];
-  messageToConversation: Map<string, string>;
-}> {
-  cached = null;
-  return getInboxState(provider);
+export async function syncInbox(
+  provider: EmailProvider,
+  userId: string
+): Promise<CacheEntry> {
+  cache.delete(userId);
+  return getInboxState(provider, userId);
 }
 
 export function filterMessages(
@@ -53,8 +55,7 @@ export function filterMessages(
   if (filters.threadId)
     list = list.filter((m) => m.threadId === filters.threadId);
   const labelId = filters.labelId;
-  if (labelId)
-    list = list.filter((m) => m.labelIds.includes(labelId));
+  if (labelId) list = list.filter((m) => m.labelIds.includes(labelId));
   if (filters.conversationId) {
     const convId = filters.conversationId;
     list = list.filter((m) => messageToConversation.get(m.id) === convId);

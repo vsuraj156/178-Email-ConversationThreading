@@ -1,15 +1,18 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { ViewToggle } from "@/components/ViewToggle";
 import { getInboxState, getMessagesInConversation } from "@/lib/inbox";
 import { getEffectiveTitle } from "@/lib/conversation-overrides";
 import { getProvider } from "@/lib/get-provider";
 import { ConversationTitleEdit } from "@/components/ConversationTitleEdit";
+import { SignOutButton } from "@/components/SignOutButton";
 
-async function getConversation(conversationId: string) {
-  const provider = await getProvider();
+async function getConversation(conversationId: string, accessToken: string, userId: string) {
+  const provider = getProvider(accessToken);
   const { messages, conversations, messageToConversation } =
-    await getInboxState(provider);
+    await getInboxState(provider, userId);
   const conversation = conversations.find((c) => c.id === conversationId);
   if (!conversation) return null;
   const conversationMessages = getMessagesInConversation(
@@ -19,7 +22,7 @@ async function getConversation(conversationId: string) {
   );
   return {
     ...conversation,
-    title: getEffectiveTitle(conversationId, conversation.title),
+    title: getEffectiveTitle(userId, conversationId, conversation.title),
     messages: conversationMessages,
   };
 }
@@ -30,7 +33,12 @@ export default async function ConversationDetailPage({
   params: Promise<{ conversationId: string }>;
 }) {
   const { conversationId } = await params;
-  const conversation = await getConversation(conversationId);
+  const session = await getServerSession(authOptions);
+  const conversation = await getConversation(
+    conversationId,
+    session?.accessToken ?? "",
+    session?.userId ?? "mock"
+  );
 
   if (!conversation) {
     return (
@@ -51,9 +59,15 @@ export default async function ConversationDetailPage({
         <Link href="/" className="font-semibold text-lg">
           Inbox
         </Link>
-        <Suspense fallback={<div className="w-32 h-9 bg-gray-100 rounded" />}>
-          <ViewToggle />
-        </Suspense>
+        <div className="flex items-center gap-4">
+          {session?.user?.email && (
+            <span className="text-sm text-gray-500">{session.user.email}</span>
+          )}
+          <Suspense fallback={<div className="w-32 h-9 bg-gray-100 rounded" />}>
+            <ViewToggle />
+          </Suspense>
+          <SignOutButton />
+        </div>
       </header>
       <main className="flex-1 p-4 max-w-3xl mx-auto w-full">
         <Link href="/" className="text-sm text-blue-600 hover:underline mb-4 inline-block">

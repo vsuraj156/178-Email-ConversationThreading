@@ -1,4 +1,6 @@
 import { NextRequest } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { getInboxState, getMessagesInConversation } from "@/lib/inbox";
 import { getEffectiveTitle, setConversationTitleOverride } from "@/lib/conversation-overrides";
 import { getProvider } from "@/lib/get-provider";
@@ -8,9 +10,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const provider = await getProvider();
+  const session = await getServerSession(authOptions);
+  const userId = session?.userId ?? "mock";
+  const provider = getProvider(session?.accessToken);
   const { messages, conversations, messageToConversation } =
-    await getInboxState(provider);
+    await getInboxState(provider, userId);
 
   const conversation = conversations.find((c) => c.id === id);
   if (!conversation) {
@@ -26,7 +30,7 @@ export async function GET(
   return Response.json({
     conversation: {
       ...conversation,
-      title: getEffectiveTitle(id, conversation.title),
+      title: getEffectiveTitle(userId, id, conversation.title),
       messages: conversationMessages,
     },
   });
@@ -37,11 +41,13 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const session = await getServerSession(authOptions);
+  const userId = session?.userId ?? "mock";
   const body = await request.json().catch(() => ({}));
   const title = body.title as string | undefined;
 
   if (title !== undefined && typeof title === "string" && title.trim()) {
-    setConversationTitleOverride(id, title.trim());
+    setConversationTitleOverride(userId, id, title.trim());
     return Response.json({
       conversation: { id, title: title.trim(), updated: true },
     });

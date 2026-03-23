@@ -1,8 +1,11 @@
 import Link from "next/link";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { getProvider } from "@/lib/get-provider";
 
 export async function ThreadList() {
-  const provider = await getProvider();
+  const session = await getServerSession(authOptions);
+  const provider = getProvider(session?.accessToken);
   const threads = await provider.getThreads();
 
   return (

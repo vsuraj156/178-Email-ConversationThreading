@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { ViewToggle } from "@/components/ViewToggle";
 import { getProvider } from "@/lib/get-provider";
+import { SignOutButton } from "@/components/SignOutButton";
 
-async function getThread(threadId: string) {
-  const provider = await getProvider();
+async function getThread(threadId: string, accessToken: string) {
+  const provider = getProvider(accessToken);
   const [threads, messages] = await Promise.all([
     provider.getThreads(),
     provider.getMessages({ threadId }),
@@ -19,7 +22,8 @@ export default async function ThreadDetailPage({
   params: Promise<{ threadId: string }>;
 }) {
   const { threadId } = await params;
-  const { thread, messages } = await getThread(threadId);
+  const session = await getServerSession(authOptions);
+  const { thread, messages } = await getThread(threadId, session?.accessToken ?? "");
 
   if (!thread) {
     return (
@@ -42,9 +46,15 @@ export default async function ThreadDetailPage({
         <Link href="/" className="font-semibold text-lg">
           Inbox
         </Link>
-        <Suspense fallback={<div className="w-32 h-9 bg-gray-100 rounded" />}>
-          <ViewToggle />
-        </Suspense>
+        <div className="flex items-center gap-4">
+          {session?.user?.email && (
+            <span className="text-sm text-gray-500">{session.user.email}</span>
+          )}
+          <Suspense fallback={<div className="w-32 h-9 bg-gray-100 rounded" />}>
+            <ViewToggle />
+          </Suspense>
+          <SignOutButton />
+        </div>
       </header>
       <main className="flex-1 p-4 max-w-3xl mx-auto w-full">
         <Link href="/" className="text-sm text-blue-600 hover:underline mb-4 inline-block">
