@@ -1,9 +1,10 @@
 import type { Message, Conversation } from "./types";
 import { getEmbeddings, cosineSimilarity } from "./embeddings";
 
-// Cosine similarity threshold for embedding-based clustering.
-// 0.80 catches semantically related emails while avoiding false merges.
-const COSINE_THRESHOLD = 0.8;
+// Combined score threshold (cosine similarity + entity bonuses).
+// Lower than a pure cosine threshold to allow entity signals to bridge
+// semantically-different-but-related emails (e.g. outreach → calendar invite).
+const COMBINED_THRESHOLD = 0.75;
 
 // Fallback Jaccard threshold (used when HARVARD_API_KEY is not set)
 const JACCARD_THRESHOLD = 0.2;
@@ -25,6 +26,53 @@ const STOP_WORDS = new Set([
   "re", "fwd", "fw", "unsubscribe", "click", "view", "email", "sent",
   "message", "mail", "inbox", "reply", "below", "above", "attached",
 ]);
+
+function parseSenderEmail(from: string): string {
+  return (from.match(/<([^>]+)>/) ?? from.match(/(\S+@\S+)/))?.[1]?.toLowerCase() ?? from.toLowerCase();
+}
+
+function parseSenderDomain(from: string): string {
+  return parseSenderEmail(from).split("@")[1] ?? "";
+}
+
+function daysBetween(a: Message, b: Message): number {
+  return (
+    Math.abs(new Date(a.date).getTime() - new Date(b.date).getTime()) /
+    (1000 * 60 * 60 * 24)
+  );
+}
+
+/**
+ * Adds bonuses to cosine similarity based on shared sender identity and time
+ * proximity. This allows semantically-different-but-related emails (e.g. a
+ * job outreach and its calendar booking confirmation) to cluster correctly.
+ */
+function hybridScore(cosine: number, a: Message, b: Message): number {
+  let bonus = 0;
+
+  const emailA = parseSenderEmail(a.from);
+  const emailB = parseSenderEmail(b.from);
+  const domainA = parseSenderDomain(a.from);
+  const domainB = parseSenderDomain(b.from);
+
+  if (emailA === emailB) {
+    bonus += 0.18; // same exact sender — strong signal
+  } else if (
+    domainA === domainB &&
+    domainA &&
+    domainA !== "gmail.com" &&
+    domainA !== "googlemail.com"
+  ) {
+    bonus += 0.08; // same organisation, different person
+  }
+
+  const days = daysBetween(a, b);
+  if (days <= 1) bonus += 0.10;
+  else if (days <= 3) bonus += 0.06;
+  else if (days <= 7) bonus += 0.03;
+
+  return cosine + bonus;
+}
 
 function getTextForEmbedding(m: Message): string {
   // Weight subject 2x by repeating it — it's the densest signal
@@ -130,7 +178,8 @@ export async function clusterMessages(messages: Message[]): Promise<{
       const texts = messages.map(getTextForEmbedding);
       const embeddings = await getEmbeddings(texts);
       const roots = unionFindMerge(messages.length, (i, j) => {
-        return cosineSimilarity(embeddings[i], embeddings[j]) >= COSINE_THRESHOLD;
+        const cosine = cosineSimilarity(embeddings[i], embeddings[j]);
+        return hybridScore(cosine, messages[i], messages[j]) >= COMBINED_THRESHOLD;
       });
       return buildConversations(messages, roots);
     } catch (err) {
