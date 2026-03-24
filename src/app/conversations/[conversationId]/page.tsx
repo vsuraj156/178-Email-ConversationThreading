@@ -53,6 +53,22 @@ export default async function ConversationDetailPage({
 
   const messages = conversation.messages ?? [];
 
+  // Assign a distinct color to each unique threadId
+  const THREAD_COLORS = [
+    "#3b82f6", // blue
+    "#22c55e", // green
+    "#f97316", // orange
+    "#a855f7", // purple
+    "#ec4899", // pink
+    "#14b8a6", // teal
+    "#eab308", // yellow
+    "#ef4444", // red
+  ];
+  const threadIds = conversation.threadIds ?? [];
+  const threadColor = new Map(
+    threadIds.map((id, i) => [id, THREAD_COLORS[i % THREAD_COLORS.length]])
+  );
+
   return (
     <div className="flex flex-col min-h-screen">
       <header className="border-b bg-white px-4 py-3 flex items-center justify-between">
@@ -83,6 +99,22 @@ export default async function ConversationDetailPage({
             {(conversation.threadIds?.length ?? 0) === 1 ? "" : "s"}
           </span>
         </div>
+        {threadIds.length > 1 && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {threadIds.map((tid) => (
+              <span
+                key={tid}
+                className="flex items-center gap-1.5 text-xs text-gray-600 bg-white border border-gray-200 rounded px-2 py-1"
+              >
+                <span
+                  className="inline-block w-2.5 h-2.5 rounded-sm flex-shrink-0"
+                  style={{ backgroundColor: threadColor.get(tid) }}
+                />
+                Thread: {tid.slice(-6)}
+              </span>
+            ))}
+          </div>
+        )}
         <ul className="space-y-4">
           {messages.map(
             (m: {
@@ -98,6 +130,10 @@ export default async function ConversationDetailPage({
               <li
                 key={m.id}
                 className="border border-gray-200 rounded-lg p-4 bg-white"
+                style={{
+                  borderLeftColor: threadColor.get(m.threadId) ?? "#e5e7eb",
+                  borderLeftWidth: "4px",
+                }}
               >
                 <div className="flex justify-between text-sm text-gray-500 mb-1">
                   <span>{m.from}</span>
