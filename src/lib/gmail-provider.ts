@@ -40,35 +40,44 @@ function gmailMessageToMessage(gm: gmail_v1.Schema$Message): Message {
   };
 }
 
+function decodeBase64(data: string): string {
+  return Buffer.from(data, "base64").toString("utf-8");
+}
+
+function findPartByMimeType(
+  parts: gmail_v1.Schema$MessagePart[],
+  mimeType: string
+): string | null {
+  for (const part of parts) {
+    if (part.mimeType === mimeType && part.body?.data) {
+      try { return decodeBase64(part.body.data); } catch { /* continue */ }
+    }
+    // Recurse into nested multipart (e.g. multipart/mixed > multipart/alternative)
+    if (part.mimeType?.startsWith("multipart/") && part.parts) {
+      const nested = findPartByMimeType(part.parts, mimeType);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+
 function extractBody(payload: gmail_v1.Schema$MessagePart | undefined): string {
   if (!payload) return "";
+
+  // Simple single-part message
   if (payload.body?.data) {
-    try {
-      return Buffer.from(payload.body.data, "base64").toString("utf-8");
-    } catch {
-      return "";
-    }
+    try { return decodeBase64(payload.body.data); } catch { return ""; }
   }
+
   if (payload.parts) {
-    for (const part of payload.parts) {
-      if (part.mimeType === "text/plain" && part.body?.data) {
-        try {
-          return Buffer.from(part.body.data, "base64").toString("utf-8");
-        } catch {
-          // continue
-        }
-      }
-    }
-    for (const part of payload.parts) {
-      if (part.mimeType === "text/html" && part.body?.data) {
-        try {
-          return Buffer.from(part.body.data, "base64").toString("utf-8");
-        } catch {
-          // continue
-        }
-      }
-    }
+    // Prefer plain text; fall back to HTML
+    return (
+      findPartByMimeType(payload.parts, "text/plain") ??
+      findPartByMimeType(payload.parts, "text/html") ??
+      ""
+    );
   }
+
   return "";
 }
 
