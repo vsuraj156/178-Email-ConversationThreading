@@ -119,6 +119,7 @@ export default async function ConversationDetailPage({
         <ConversationGrid
           initialMessages={messages}
           threadColor={Object.fromEntries(threadColor)}
+          conversationId={conversationId}
         />
       </main>
     </div>

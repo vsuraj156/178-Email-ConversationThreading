@@ -1,26 +1,93 @@
 import type { Message, Conversation, MessageFilters } from "./types";
 import type { EmailProvider } from "./provider";
 import { clusterMessages } from "./clustering";
+import { getMessageOverrides } from "./manual-overrides";
 
-type CacheEntry = {
-  messages: Message[];
+// Messages are expensive (many Gmail API calls) — cache separately
+const messageCache = new Map<string, Message[]>();
+
+// Conversations are cheap to recompute — invalidated on merge/split without
+// re-fetching messages
+const conversationCache = new Map<string, {
   conversations: Conversation[];
   messageToConversation: Map<string, string>;
-};
+}>();
 
-// Keyed by userId so each user gets their own isolated cache
-const cache = new Map<string, CacheEntry>();
+function rebuildFromAssignments(
+  messages: Message[],
+  messageToConversation: Map<string, string>,
+  titleFallbacks: Map<string, string>
+): Conversation[] {
+  const groups = new Map<string, Message[]>();
+  for (const m of messages) {
+    const cid = messageToConversation.get(m.id);
+    if (!cid) continue;
+    if (!groups.has(cid)) groups.set(cid, []);
+    groups.get(cid)!.push(m);
+  }
+
+  const conversations: Conversation[] = [];
+  groups.forEach((msgs, cid) => {
+    const sorted = [...msgs].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+    conversations.push({
+      id: cid,
+      title: titleFallbacks.get(cid) ?? sorted[0]?.subject ?? cid,
+      messageIds: sorted.map((m) => m.id),
+      threadIds: Array.from(new Set(msgs.map((m) => m.threadId))),
+      updatedAt: sorted[sorted.length - 1]?.date ?? new Date().toISOString(),
+    });
+  });
+
+  return conversations.sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  );
+}
+
+async function buildConversationCache(userId: string, messages: Message[]) {
+  const { conversations, messageToConversation } = await clusterMessages(messages);
+
+  const overrides = getMessageOverrides(userId);
+  if (overrides.size > 0) {
+    overrides.forEach((convId, msgId) => {
+      messageToConversation.set(msgId, convId);
+    });
+    const titleFallbacks = new Map(conversations.map((c) => [c.id, c.title]));
+    const rebuilt = rebuildFromAssignments(messages, messageToConversation, titleFallbacks);
+    conversationCache.set(userId, { conversations: rebuilt, messageToConversation });
+  } else {
+    conversationCache.set(userId, { conversations, messageToConversation });
+  }
+}
 
 export async function getInboxState(
   provider: EmailProvider,
   userId: string
-): Promise<CacheEntry> {
-  if (cache.has(userId)) return cache.get(userId)!;
-  const messages = await provider.getMessages();
-  const { conversations, messageToConversation } = await clusterMessages(messages);
-  const entry: CacheEntry = { messages, conversations, messageToConversation };
-  cache.set(userId, entry);
-  return entry;
+): Promise<{
+  messages: Message[];
+  conversations: Conversation[];
+  messageToConversation: Map<string, string>;
+}> {
+  if (!messageCache.has(userId)) {
+    const messages = await provider.getMessages();
+    messageCache.set(userId, messages);
+  }
+  const messages = messageCache.get(userId)!;
+
+  if (!conversationCache.has(userId)) {
+    await buildConversationCache(userId, messages);
+  }
+  const { conversations, messageToConversation } = conversationCache.get(userId)!;
+
+  return { messages, conversations, messageToConversation };
+}
+
+/** Invalidates only the conversation cache — no re-fetch from Gmail. */
+export async function invalidateConversations(userId: string): Promise<void> {
+  conversationCache.delete(userId);
+  const messages = messageCache.get(userId);
+  if (messages) await buildConversationCache(userId, messages);
 }
 
 export function getMessagesInConversation(
@@ -40,8 +107,13 @@ export function getMessagesInConversation(
 export async function syncInbox(
   provider: EmailProvider,
   userId: string
-): Promise<CacheEntry> {
-  cache.delete(userId);
+): Promise<{
+  messages: Message[];
+  conversations: Conversation[];
+  messageToConversation: Map<string, string>;
+}> {
+  messageCache.delete(userId);
+  conversationCache.delete(userId);
   return getInboxState(provider, userId);
 }
 
