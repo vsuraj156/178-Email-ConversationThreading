@@ -101,20 +101,21 @@ export function createGmailProvider(gmail: gmail_v1.Gmail): EmailProvider {
         q: filters?.labelId ? `label:${filters.labelId}` : undefined,
       });
       const threadIds = (listRes.data.threads ?? []).map((t) => t.id!);
-      const allMessages: Message[] = [];
 
-      for (const threadId of threadIds) {
-        const threadRes = await gmail.users.threads.get({
-          userId: "me",
-          id: threadId,
-          format: "metadata",
-          metadataHeaders: ["From", "To", "Subject", "Date"],
-        });
-        const threadMessages = threadRes.data.messages ?? [];
-        for (const gm of threadMessages) {
-          allMessages.push(gmailMessageToMessage(gm));
-        }
-      }
+      const threadResults = await Promise.all(
+        threadIds.map((threadId) =>
+          gmail.users.threads.get({
+            userId: "me",
+            id: threadId,
+            format: "metadata",
+            metadataHeaders: ["From", "To", "Subject", "Date"],
+          })
+        )
+      );
+
+      const allMessages = threadResults.flatMap((res) =>
+        (res.data.messages ?? []).map(gmailMessageToMessage)
+      );
 
       if (filters?.labelId) {
         return allMessages.filter((m) => m.labelIds.includes(filters!.labelId!));
@@ -128,29 +129,32 @@ export function createGmailProvider(gmail: gmail_v1.Gmail): EmailProvider {
         maxResults: MAX_THREADS,
       });
       const threadIds = (listRes.data.threads ?? []).map((t) => t.id!);
-      const threads: Thread[] = [];
 
-      for (const threadId of threadIds) {
-        const threadRes = await gmail.users.threads.get({
-          userId: "me",
-          id: threadId,
-          format: "metadata",
-          metadataHeaders: ["Subject", "Date"],
-        });
-        const messages = threadRes.data.messages ?? [];
-        const messageIds = messages.map((m) => m.id!);
+      const threadResults = await Promise.all(
+        threadIds.map((threadId) =>
+          gmail.users.threads.get({
+            userId: "me",
+            id: threadId,
+            format: "metadata",
+            metadataHeaders: ["Subject", "Date"],
+          })
+        )
+      );
+
+      const threads: Thread[] = threadResults.map((res) => {
+        const messages = res.data.messages ?? [];
         const first = messages[0];
         const headers = first?.payload?.headers ?? [];
         const subject = getHeader(headers, "Subject");
         const internalDate = first?.internalDate ? Number(first.internalDate) : 0;
-        threads.push({
-          id: threadId,
+        return {
+          id: res.data.id ?? "",
           subject: subject || "(No subject)",
-          messageIds,
+          messageIds: messages.map((m) => m.id!),
           snippet: first?.snippet ?? "",
           updatedAt: new Date(internalDate).toISOString(),
-        });
-      }
+        };
+      });
 
       return threads.sort(
         (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
