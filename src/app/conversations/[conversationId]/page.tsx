@@ -9,6 +9,7 @@ import { getProvider } from "@/lib/get-provider";
 import { ConversationTitleEdit } from "@/components/ConversationTitleEdit";
 import { SignOutButton } from "@/components/SignOutButton";
 import { ConversationGrid } from "@/components/ConversationGrid";
+import { getConversationSummary, getConversationTitle } from "@/lib/conversation-summary";
 
 async function getConversation(conversationId: string, accessToken: string, userId: string) {
   const provider = getProvider(accessToken);
@@ -21,10 +22,19 @@ async function getConversation(conversationId: string, accessToken: string, user
     messageToConversation,
     conversationId
   );
+  const isMultiThread = (conversation.threadIds?.length ?? 0) > 1;
+  const [summary, aiTitle] = isMultiThread
+    ? await Promise.all([
+        getConversationSummary(conversationId, conversationMessages),
+        getConversationTitle(conversationId, conversationMessages),
+      ])
+    : [null, null];
+
   return {
     ...conversation,
-    title: getEffectiveTitle(userId, conversationId, conversation.title),
+    title: getEffectiveTitle(userId, conversationId, aiTitle ?? conversation.title),
     messages: conversationMessages,
+    summary,
   };
 }
 
@@ -90,7 +100,7 @@ export default async function ConversationDetailPage({
         <Link href="/" className="text-sm text-blue-600 hover:underline mb-4 inline-block">
           ← Back to Inbox
         </Link>
-        <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
           <ConversationTitleEdit
             conversationId={conversationId}
             initialTitle={conversation.title}
@@ -100,6 +110,11 @@ export default async function ConversationDetailPage({
             {(conversation.threadIds?.length ?? 0) === 1 ? "" : "s"}
           </span>
         </div>
+        {conversation.summary && (
+          <p className="text-sm text-gray-500 italic mb-4">
+            {conversation.summary}
+          </p>
+        )}
         {threadIds.length > 1 && (
           <div className="flex flex-wrap gap-2 mb-4">
             {threadIds.map((tid) => (
