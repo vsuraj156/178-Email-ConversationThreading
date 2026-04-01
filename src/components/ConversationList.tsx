@@ -64,16 +64,18 @@ export async function ConversationList() {
   const { messages, conversations, messageToConversation } =
     await getInboxState(provider, userId);
 
-  const enriched = conversations.map((c) => {
-    const convMessages = getMessagesInConversation(messages, messageToConversation, c.id);
-    return {
-      id: c.id,
-      title: getEffectiveTitle(userId, c.id, c.title),
-      threadCount: c.threadIds?.length ?? 0,
-      messageCount: convMessages.length,
-      changelog: buildChangelog(convMessages, userEmail),
-    };
-  });
+  const enriched = conversations
+    .filter((c) => (c.threadIds?.length ?? 0) > 1)
+    .map((c) => {
+      const convMessages = getMessagesInConversation(messages, messageToConversation, c.id);
+      return {
+        id: c.id,
+        title: getEffectiveTitle(userId, c.id, c.title),
+        threadCount: c.threadIds?.length ?? 0,
+        messageCount: convMessages.length,
+        changelog: buildChangelog(convMessages, userEmail),
+      };
+    });
 
   return <ConversationListClient conversations={enriched} />;
 }
