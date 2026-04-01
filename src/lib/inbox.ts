@@ -70,7 +70,11 @@ export async function getInboxState(
   messageToConversation: Map<string, string>;
 }> {
   if (!messageCache.has(userId)) {
-    const messages = await provider.getMessages();
+    let messages = await provider.getMessages();
+    const freezeDate = process.env.FREEZE_DATE ? new Date(process.env.FREEZE_DATE) : null;
+    if (freezeDate) {
+      messages = messages.filter((m) => new Date(m.date) <= freezeDate);
+    }
     messageCache.set(userId, messages);
   }
   const messages = messageCache.get(userId)!;

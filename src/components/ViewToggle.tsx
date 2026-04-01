@@ -25,7 +25,7 @@ export function ViewToggle() {
           view === "threads" ? "bg-white shadow text-gray-900" : "text-gray-600"
         }`}
       >
-        Threads
+        All Threads
       </button>
       <button
         onClick={() => setView("conversations")}
@@ -35,7 +35,7 @@ export function ViewToggle() {
             : "text-gray-600"
         }`}
       >
-        Conversations
+        Multi-thread
       </button>
     </div>
   );
